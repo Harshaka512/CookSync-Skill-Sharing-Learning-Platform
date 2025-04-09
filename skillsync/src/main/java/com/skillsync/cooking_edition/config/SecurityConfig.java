@@ -1,15 +1,14 @@
 package com.skillsync.cooking_edition.config;
 
+import java.util.Arrays;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
-import java.util.Arrays;
 
 @Configuration
 public class SecurityConfig {
@@ -27,8 +26,16 @@ public class SecurityConfig {
             .oauth2Login(oauth2 -> oauth2
                 .defaultSuccessUrl("http://localhost:3000/dashboard", true))
             .logout(logout -> logout
+                .logoutUrl("/api/auth/logout")
                 .logoutSuccessUrl("http://localhost:3000")
-                .permitAll());
+                .invalidateHttpSession(true)
+                .deleteCookies("JSESSIONID")
+                .clearAuthentication(true)
+                .permitAll())
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
+                .maximumSessions(1)
+                .maxSessionsPreventsLogin(false));
         return http.build();
     }
     
