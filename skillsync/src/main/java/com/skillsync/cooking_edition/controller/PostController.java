@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -25,6 +26,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.skillsync.cooking_edition.model.Post;
 import com.skillsync.cooking_edition.repository.PostRepository;
+import javax.media.Manager;
+import javax.media.MediaLocator;
+import javax.media.Player;
+import javax.media.Time;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -39,7 +44,7 @@ public class PostController {
     private String uploadPath;
 
     private static final int MAX_IMAGES = 3;
-    private static final int MAX_VIDEO_DURATION_SECONDS = 30;
+    private static final double MAX_VIDEO_DURATION_SECONDS = 300.0; // 5 minutes
 
     @GetMapping
     public ResponseEntity<List<Post>> listPosts() {
@@ -153,7 +158,9 @@ public class PostController {
                             mediaType = "image";
                         } else if (firstFileType != null && firstFileType.startsWith("video/")) {
                             mediaType = "video";
-                            // TODO: Add video duration validation using a video processing library
+                            if (!validateVideoDuration(media.get(0))) {
+                                return ResponseEntity.badRequest().body("Video duration exceeds " + MAX_VIDEO_DURATION_SECONDS + " seconds");
+                            }
                         }
                         logger.info("Detected media type: {}", mediaType);
                     }
@@ -267,7 +274,9 @@ public class PostController {
                                     post.setMediaType("image");
                                 } else if (firstFileType != null && firstFileType.startsWith("video/")) {
                                     post.setMediaType("video");
-                                    // TODO: Add video duration validation using a video processing library
+                                    if (!validateVideoDuration(media.get(0))) {
+                                        return ResponseEntity.badRequest().body("Video duration exceeds " + MAX_VIDEO_DURATION_SECONDS + " seconds");
+                                    }
                                 }
                             } else {
                                 post.setMediaType(mediaType);
@@ -346,6 +355,33 @@ public class PostController {
             logger.error("Error testing MongoDB connection: {}", e.getMessage(), e);
             result.put("error", e.getMessage());
             return ResponseEntity.status(500).body(result);
+        }
+    }
+
+    private boolean validateVideoDuration(MultipartFile file) {
+        try {
+            // Save the file temporarily
+            Path tempFile = Files.createTempFile("video", ".mp4");
+            Files.copy(file.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+            
+            // Create a media locator
+            MediaLocator ml = new MediaLocator(tempFile.toUri().toURL());
+            
+            // Create a player
+            Player player = Manager.createRealizedPlayer(ml);
+            
+            // Get the duration
+            Time duration = player.getDuration();
+            double durationInSeconds = duration.getSeconds();
+            
+            // Clean up
+            player.close();
+            Files.delete(tempFile);
+            
+            return durationInSeconds <= MAX_VIDEO_DURATION_SECONDS;
+        } catch (Exception e) {
+            logger.error("Error validating video duration", e);
+            return false;
         }
     }
 } 
