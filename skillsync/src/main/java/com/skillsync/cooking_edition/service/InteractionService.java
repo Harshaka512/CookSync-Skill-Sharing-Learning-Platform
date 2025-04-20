@@ -29,6 +29,8 @@ public class InteractionService {
     public void toggleLike(String postId, String userId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
         Like existingLike = likeRepository.findByPostIdAndUserId(postId, userId);
         if (existingLike != null) {
@@ -41,14 +43,19 @@ public class InteractionService {
             likeRepository.save(like);
             post.setLikes(post.getLikes() + 1);
 
-            // Create notification
-            Notification notification = new Notification();
-            notification.setUserId(post.getUserId());
-            notification.setMessage("Someone liked your post");
-            notification.setType(Notification.NotificationType.LIKE);
-            notification.setRelatedPostId(postId);
-            notification.setCreatedAt(LocalDateTime.now());
-            notificationRepository.save(notification);
+            // Create notification for post owner
+            if (!post.getUserId().equals(userId)) { // Don't notify if user liked their own post
+                Notification notification = new Notification();
+                notification.setUserId(post.getUserId());
+                notification.setSenderId(userId);
+                notification.setSenderName(user.getName());
+                notification.setMessage(user.getName() + " liked your post");
+                notification.setType(Notification.NotificationType.LIKE);
+                notification.setRelatedPostId(postId);
+                notification.setCreatedAt(LocalDateTime.now());
+                notification.setRead(false);
+                notificationRepository.save(notification);
+            }
         }
 
         postRepository.save(post);
@@ -80,10 +87,13 @@ public class InteractionService {
         // Create notification
         Notification notification = new Notification();
         notification.setUserId(post.getUserId());
+        notification.setSenderId(userId);
+        notification.setSenderName(user.getName());
         notification.setMessage(user.getName() + " commented on your post");
         notification.setType(Notification.NotificationType.COMMENT);
         notification.setRelatedPostId(postId);
         notification.setCreatedAt(LocalDateTime.now());
+        notification.setRead(false);
         notificationRepository.save(notification);
 
         return savedComment;
