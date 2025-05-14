@@ -12,7 +12,18 @@ axios.defaults.withCredentials = true;
 axios.defaults.headers.common['Accept'] = 'application/json';
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 
-const PostInteraction = ({ post, onUpdate }) => {
+/*************  ✨ Windsurf Command ⭐  *************/
+/**
+ * PostInteraction is a React component that renders a section of a post
+ * that shows the number of likes, comments, and allows users to like,
+ * comment, edit, and delete their own comments.
+ * 
+ * @param {Object} post The post object
+ * @param {Function} onUpdate An optional callback function to update the
+ * post object when a user likes or comments on the post.
+ * @returns {React.Component} The PostInteraction component
+ */
+/*******  ecfa07c9-4e7c-418f-8ad3-cc0bdf886ef7  *******/const PostInteraction = ({ post, onUpdate }) => {
   const { user, checkAuthStatus } = useAuth();
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes || 0);
