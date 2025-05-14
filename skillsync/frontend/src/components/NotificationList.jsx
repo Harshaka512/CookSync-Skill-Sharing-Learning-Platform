@@ -26,6 +26,8 @@ const NotificationList = () => {
   const [notifications, setNotifications] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
 
   useEffect(() => {
     if (user && user.id) {
@@ -38,21 +40,120 @@ const NotificationList = () => {
 
   const fetchNotifications = async () => {
     try {
-      const response = await axios.get('/api/notifications', {
+      console.log('Fetching notifications for user:', user.id, 'email:', user.email);
+      
+      // First verify the user object
+      if (!user || !user.id) {
+        console.error('User object is invalid:', user);
+        return;
+      }
+
+      // Try the main endpoint first
+      try {
+        console.log('Trying main endpoint for user:', user.email);
+        const response = await axios.get(`/api/notifications`, {
         withCredentials: true,
         headers: {
-          'Authorization': `Bearer ${user.id}`
+            'Authorization': `Bearer ${user.id}`,
+            'Content-Type': 'application/json'
         }
       });
-      setNotifications(response.data);
-      setUnreadCount(response.data.filter(n => !n.read).length);
+
+        console.log('Notifications response for', user.email, ':', response.data);
+
+        if (!Array.isArray(response.data)) {
+          console.error('Invalid response format for', user.email, ':', response.data);
+          return;
+        }
+
+        // Filter out invalid notifications
+        const validNotifications = response.data.filter(notification => {
+          const isValid = notification && 
+            notification.id && 
+            notification.type && 
+            notification.senderName;
+          
+          if (!isValid) {
+            console.warn('Invalid notification found for', user.email, ':', notification);
+          }
+          return isValid;
+        });
+
+        console.log('Valid notifications count for', user.email, ':', validNotifications.length);
+        setNotifications(validNotifications);
+        setUnreadCount(validNotifications.filter(n => !n.read).length);
+        setRetryCount(0); // Reset retry count on success
+      } catch (mainError) {
+        console.error('Error with main endpoint for', user.email, ':', mainError);
+        
+        // Try the fallback endpoint
+        try {
+          console.log('Trying fallback endpoint for', user.email);
+          const fallbackResponse = await axios.get(`/api/interactions/users/${user.id}/notifications`, {
+            withCredentials: true,
+            headers: {
+              'Authorization': `Bearer ${user.id}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (Array.isArray(fallbackResponse.data)) {
+            const validNotifications = fallbackResponse.data.filter(notification => {
+              const isValid = notification && 
+                notification.id && 
+                notification.type && 
+                notification.senderName;
+              
+              if (!isValid) {
+                console.warn('Invalid notification in fallback for', user.email, ':', notification);
+              }
+              return isValid;
+            });
+            console.log('Fallback notifications count for', user.email, ':', validNotifications.length);
+            setNotifications(validNotifications);
+            setUnreadCount(validNotifications.filter(n => !n.read).length);
+            setRetryCount(0);
+            return;
+          }
+        } catch (fallbackError) {
+          console.error('Error with fallback endpoint for', user.email, ':', fallbackError);
+          throw mainError; // Throw the original error if both endpoints fail
+        }
+      }
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('Error fetching notifications for', user.email, ':', error);
+      console.error('Error details:', {
+        user: {
+          id: user.id,
+          email: user.email
+        },
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        }
+      });
+
+      // Only retry for 500 errors and if we haven't exceeded max retries
+      if (error.response?.status === 500 && retryCount < MAX_RETRIES) {
+        setRetryCount(prev => prev + 1);
+        // Retry after 5 seconds
+        setTimeout(fetchNotifications, 5000);
+      } else {
+        setRetryCount(0); // Reset retry count
+      }
+      // Don't show error to user for notification badge
+      // Just keep existing notifications
     }
   };
 
   const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
+    // Navigate to notifications page instead of showing menu
+    navigate('/notifications');
   };
 
   const handleClose = () => {
@@ -148,62 +249,6 @@ const NotificationList = () => {
           <NotificationsIcon />
         </Badge>
       </IconButton>
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleClose}
-        PaperProps={{
-          style: {
-            maxHeight: 400,
-            width: 320,
-          },
-        }}
-      >
-        <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">Notifications</Typography>
-          {unreadCount > 0 && (
-            <Button size="small" onClick={markAllAsRead}>
-              Mark all as read
-            </Button>
-          )}
-        </Box>
-        <Divider />
-        {notifications.length === 0 ? (
-          <MenuItem>
-            <Typography variant="body2" color="text.secondary">
-              No notifications
-            </Typography>
-          </MenuItem>
-        ) : (
-          notifications.map((notification) => (
-            <MenuItem
-              key={notification.id}
-              onClick={() => handleNotificationClick(notification)}
-              sx={{
-                backgroundColor: notification.read ? 'inherit' : 'action.hover',
-                '&:hover': {
-                  backgroundColor: 'action.selected',
-                },
-                py: 1.5,
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                <Box sx={{ mr: 2 }}>
-                  {getNotificationIcon(notification.type)}
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" component="div">
-                    {getNotificationMessage(notification)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                  </Typography>
-                </Box>
-              </Box>
-            </MenuItem>
-          ))
-        )}
-      </Menu>
     </div>
   );
 };
