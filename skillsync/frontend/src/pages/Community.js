@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Grid,
@@ -17,24 +17,27 @@ import {
   useMediaQuery,
   Alert,
   Snackbar,
-  Button
+  Button,
+  TextField,
+  InputAdornment,
+  IconButton
 } from '@mui/material';
 import axios from 'axios';
 import PostInteraction from '../components/PostInteraction';
 import { useInView } from 'react-intersection-observer';
 import { formatDistanceToNow } from 'date-fns';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
 import { useAuth } from '../contexts/AuthContext';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
 
 const Community = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
-  const postRefs = useRef({});
   
   const [posts, setPosts] = useState([]);
   const [followingPosts, setFollowingPosts] = useState([]);
@@ -50,21 +53,23 @@ const Community = () => {
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [snackbarSeverity, setSnackbarSeverity] = useState('error');
   const [followStatus, setFollowStatus] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
   
   const { ref, inView } = useInView({
     threshold: 0,
   });
 
   const categories = [
-    'all',
-    'breakfast',
-    'lunch',
-    'dinner',
-    'dessert',
-    'snacks',
-    'vegetarian',
-    'vegan',
-    'gluten-free'
+    { id: 'all', label: 'All Posts', icon: '🌐', color: 'primary' },
+    { id: 'breakfast', label: 'Breakfast', icon: '🍳', color: 'warning' },
+    { id: 'lunch', label: 'Lunch', icon: '🥪', color: 'success' },
+    { id: 'dinner', label: 'Dinner', icon: '🍽️', color: 'error' },
+    { id: 'dessert', label: 'Dessert', icon: '🍰', color: 'secondary' },
+    { id: 'snacks', label: 'Snacks', icon: '🥨', color: 'info' },
+    { id: 'vegetarian', label: 'Vegetarian', icon: '🥗', color: 'success' },
+    { id: 'vegan', label: 'Vegan', icon: '🌱', color: 'success' },
+    { id: 'gluten-free', label: 'Gluten Free', icon: '🌾', color: 'warning' }
   ];
 
   const showError = (message) => {
@@ -198,49 +203,6 @@ const Community = () => {
     }
   }, [inView, hasMore, loadingMore, loadMorePosts, activeTab]);
 
-  useEffect(() => {
-    // Handle query parameters for post navigation
-    const params = new URLSearchParams(location.search);
-    const postId = params.get('postId');
-    const type = params.get('type');
-    const commentId = params.get('commentId');
-    
-    if (postId) {
-      // Wait for posts to load
-      const checkAndScroll = () => {
-        const targetPost = postRefs.current[postId];
-        if (targetPost) {
-          // If it's a comment notification, scroll directly to the comment
-          if (commentId) {
-            const commentElement = document.getElementById(`comment-${commentId}`);
-            if (commentElement) {
-              commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              commentElement.style.transition = 'background-color 0.5s ease';
-              commentElement.style.backgroundColor = 'rgba(0, 0, 255, 0.1)';
-              setTimeout(() => {
-                commentElement.style.backgroundColor = '';
-              }, 2000);
-            }
-          } else {
-            // For non-comment notifications, scroll to the post
-            targetPost.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            targetPost.style.transition = 'background-color 0.5s ease';
-            targetPost.style.backgroundColor = type === 'like' ? 'rgba(255, 0, 0, 0.1)' : 
-                                             type === 'comment' ? 'rgba(0, 0, 255, 0.1)' : 
-                                             'rgba(0, 255, 0, 0.1)';
-            setTimeout(() => {
-              targetPost.style.backgroundColor = '';
-            }, 2000);
-          }
-        }
-      };
-
-      // Try to scroll immediately and also after a short delay to ensure posts are loaded
-      checkAndScroll();
-      setTimeout(checkAndScroll, 1000);
-    }
-  }, [location.search, posts, followingPosts]);
-
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
@@ -307,17 +269,67 @@ const Community = () => {
     });
   }, [posts, followingPosts, user, activeTab]);
 
+  const filteredPosts = posts.filter(post => {
+    const searchLower = searchQuery.toLowerCase();
+    const descriptionLower = post.description?.toLowerCase() || '';
+    const titleLower = post.title?.toLowerCase() || '';
+    
+    // Check if the search query matches username
+    const matchesSearch = post.userName.toLowerCase().includes(searchLower);
+    
+    // Check if the category matches in title, description, or category field
+    const matchesCategory = selectedCategory === 'all' || 
+      (selectedCategory !== 'all' && (
+        titleLower.includes(selectedCategory.toLowerCase()) ||
+        descriptionLower.includes(selectedCategory.toLowerCase()) ||
+        post.category?.toLowerCase() === selectedCategory.toLowerCase()
+      ));
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  const filteredFollowingPosts = followingPosts.filter(post => {
+    const searchLower = searchQuery.toLowerCase();
+    const descriptionLower = post.description?.toLowerCase() || '';
+    const titleLower = post.title?.toLowerCase() || '';
+    
+    // Check if the search query matches username
+    const matchesSearch = post.userName.toLowerCase().includes(searchLower);
+    
+    // Check if the category matches in title, description, or category field
+    const matchesCategory = selectedCategory === 'all' || 
+      (selectedCategory !== 'all' && (
+        titleLower.includes(selectedCategory.toLowerCase()) ||
+        descriptionLower.includes(selectedCategory.toLowerCase()) ||
+        post.category?.toLowerCase() === selectedCategory.toLowerCase()
+      ));
+    
+    return matchesSearch && matchesCategory;
+  });
+
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setSearchQuery(value);
+    
+    // Clear any existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Set a new timeout to debounce the search
+    const timeout = setTimeout(() => {
+      if (activeTab === 0) {
+        fetchPosts();
+      } else {
+        fetchFollowingPosts();
+      }
+    }, 300);
+    
+    setSearchTimeout(timeout);
+  };
+
   const renderPost = (post) => (
-    <Card 
-      key={post.id} 
-      ref={el => postRefs.current[post.id] = el}
-      sx={{ 
-        mb: 3, 
-        borderRadius: 2, 
-        boxShadow: 2,
-        transition: 'background-color 0.5s ease'
-      }}
-    >
+    <Card key={post.id} sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <Avatar
@@ -380,30 +392,44 @@ const Community = () => {
         
         {post.mediaUrls && post.mediaUrls.length > 0 && (
           <Box sx={{ mt: 2, mb: 2 }}>
-            {post.mediaType === 'image' ? (
-              <img
-                src={post.mediaUrls[0]}
-                alt={post.title}
-                style={{ 
-                  maxWidth: '100%', 
-                  borderRadius: '8px',
-                  maxHeight: '500px',
-                  objectFit: 'cover'
-                }}
-              />
-            ) : post.mediaType === 'video' ? (
-              <video
-                controls
-                style={{ 
-                  maxWidth: '100%', 
-                  borderRadius: '8px',
-                  maxHeight: '500px'
-                }}
-              >
-                <source src={post.mediaUrls[0]} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            ) : null}
+            <Grid container spacing={1}>
+              {post.mediaUrls.map((url, index) => {
+                const isVideo = url.match(/\.(mp4|webm|ogg)$/i);
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={index}>
+                    {!isVideo ? (
+                      <img
+                        src={url}
+                        alt={`${post.title} - Image ${index + 1}`}
+                        style={{ 
+                          width: '100%',
+                          height: '200px',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                        onError={(e) => {
+                          console.error('Error loading image:', url);
+                          e.target.src = '/placeholder-image.jpg';
+                        }}
+                      />
+                    ) : (
+                      <video
+                        controls
+                        style={{ 
+                          width: '100%',
+                          height: '200px',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                      >
+                        <source src={url} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                    )}
+                  </Grid>
+                );
+              })}
+            </Grid>
           </Box>
         )}
         
@@ -416,10 +442,45 @@ const Community = () => {
               {post.ingredients.map((ingredient, index) => (
                 <Chip
                   key={index}
-                  label={`${ingredient}${post.amounts ? ` - ${post.amounts[index]}` : ''}`}
+                  label={post.amounts && post.amounts[index] ? 
+                    `${ingredient} - ${post.amounts[index]}` : 
+                    ingredient}
                   size="small"
                   variant="outlined"
                 />
+              ))}
+            </Box>
+          </Box>
+        )}
+
+        {post.instructions && post.instructions.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Instructions:
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {post.instructions.map((instruction, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      minWidth: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: 'primary.main',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    {index + 1}
+                  </Typography>
+                  <Typography variant="body2">
+                    {instruction}
+                  </Typography>
+                </Box>
               ))}
             </Box>
           </Box>
@@ -446,16 +507,66 @@ const Community = () => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {categories.map((category) => (
                   <Chip
-                    key={category}
-                    label={category.charAt(0).toUpperCase() + category.slice(1)}
-                    onClick={() => handleCategoryChange(category)}
-                    color={selectedCategory === category ? 'primary' : 'default'}
-                    variant={selectedCategory === category ? 'filled' : 'outlined'}
+                    key={category.id}
+                    label={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <span>{category.icon}</span>
+                        <span>{category.label}</span>
+                      </Box>
+                    }
+                    onClick={() => handleCategoryChange(category.id)}
+                    color={selectedCategory === category.id ? category.color : 'default'}
+                    variant={selectedCategory === category.id ? 'filled' : 'outlined'}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      '&:hover': {
+                        backgroundColor: selectedCategory === category.id ? `${category.color}.main` : 'action.hover',
+                        color: selectedCategory === category.id ? 'white' : 'inherit',
+                      },
+                      transition: 'all 0.2s ease-in-out',
+                      borderColor: selectedCategory === category.id ? `${category.color}.main` : 'inherit',
+                      '& .MuiChip-label': {
+                        width: '100%',
+                      }
+                    }}
                   />
                 ))}
               </Box>
             </Paper>
           </Grid>
+        )}
+
+        {/* Mobile Categories */}
+        {isMobile && (
+          <Box sx={{ mb: 3, overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
+            <Box sx={{ display: 'inline-flex', gap: 1, pb: 1, px: 1 }}>
+              {categories.map((category) => (
+                <Chip
+                  key={category.id}
+                  label={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <span>{category.icon}</span>
+                      <span>{category.label}</span>
+                    </Box>
+                  }
+                  onClick={() => handleCategoryChange(category.id)}
+                  color={selectedCategory === category.id ? category.color : 'default'}
+                  variant={selectedCategory === category.id ? 'filled' : 'outlined'}
+                  sx={{
+                    '&:hover': {
+                      backgroundColor: selectedCategory === category.id ? `${category.color}.main` : 'action.hover',
+                      color: selectedCategory === category.id ? 'white' : 'inherit',
+                    },
+                    transition: 'all 0.2s ease-in-out',
+                    borderColor: selectedCategory === category.id ? `${category.color}.main` : 'inherit',
+                    '& .MuiChip-label': {
+                      width: '100%',
+                    }
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
         )}
 
         {/* Main Content */}
@@ -468,23 +579,6 @@ const Community = () => {
               Connect with fellow cooking enthusiasts and share your culinary experiences
             </Typography>
             
-            {/* Mobile Categories */}
-            {isMobile && (
-              <Box sx={{ mb: 3, overflowX: 'auto', whiteSpace: 'nowrap' }}>
-                <Box sx={{ display: 'inline-flex', gap: 1, pb: 1 }}>
-                  {categories.map((category) => (
-                    <Chip
-                      key={category}
-                      label={category.charAt(0).toUpperCase() + category.slice(1)}
-                      onClick={() => handleCategoryChange(category)}
-                      color={selectedCategory === category ? 'primary' : 'default'}
-                      variant={selectedCategory === category ? 'filled' : 'outlined'}
-                    />
-                  ))}
-                </Box>
-              </Box>
-            )}
-            
             <Tabs
               value={activeTab}
               onChange={handleTabChange}
@@ -493,6 +587,39 @@ const Community = () => {
               <Tab label="For You" />
               <Tab label="Following" />
             </Tabs>
+            
+            <TextField
+              fullWidth
+              variant="outlined"
+              placeholder="Search by username..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+              sx={{ mb: 3 }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery && (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setSearchQuery('');
+                        if (activeTab === 0) {
+                          fetchPosts();
+                        } else {
+                          fetchFollowingPosts();
+                        }
+                      }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                )
+              }}
+            />
             
             <Divider sx={{ mb: 3 }} />
             
@@ -516,9 +643,9 @@ const Community = () => {
               <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                 <CircularProgress />
               </Box>
-            ) : (activeTab === 0 ? posts : followingPosts).length > 0 ? (
+            ) : (activeTab === 0 ? filteredPosts : filteredFollowingPosts).length > 0 ? (
               <>
-                {(activeTab === 0 ? posts : followingPosts).map(renderPost)}
+                {(activeTab === 0 ? filteredPosts : filteredFollowingPosts).map(renderPost)}
                 {activeTab === 0 && hasMore && (
                   <Box ref={ref} sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                     {loadingMore ? <CircularProgress /> : null}
@@ -527,9 +654,11 @@ const Community = () => {
               </>
             ) : (
               <Typography align="center" color="text.secondary">
-                {activeTab === 0 
-                  ? 'No posts yet. Be the first to share!'
-                  : 'No posts from followed users yet. Follow some users to see their posts here!'}
+                {searchQuery 
+                  ? 'No posts found matching your search'
+                  : activeTab === 0 
+                    ? 'No posts yet. Be the first to share!'
+                    : 'No posts from followed users yet. Follow some users to see their posts here!'}
               </Typography>
             )}
           </Paper>
