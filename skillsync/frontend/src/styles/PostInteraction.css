@@ -56,8 +56,9 @@
 
 .comment.highlighted {
   background-color: rgba(255, 255, 0, 0.1);
-  border-left: 3px solid #ffd700;
-  box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+  border-left: 4px solid #FFD700;
+  box-shadow: 0 0 10px rgba(255, 255, 0, 0.2);
+  transition: all 0.3s ease;
 }
 
 .comment.reply {
@@ -69,21 +70,28 @@
 @keyframes highlight-pulse {
   0% {
     background-color: rgba(255, 255, 0, 0.1);
-    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.2);
+    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.4);
+    transform: scale(1);
   }
   50% {
-    background-color: rgba(255, 255, 0, 0.3);
-    box-shadow: 0 0 15px 5px rgba(255, 215, 0, 0.3);
+    background-color: rgba(255, 255, 0, 0.2);
+    box-shadow: 0 0 10px 5px rgba(255, 255, 0, 0.2);
+    transform: scale(1.01);
   }
   100% {
     background-color: rgba(255, 255, 0, 0.1);
-    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.2);
+    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.4);
+    transform: scale(1);
   }
 }
 
 .highlight-animation {
   animation: highlight-pulse 2s ease-in-out;
   z-index: 1;
+  position: relative;
+  border: 2px solid #FFD700;
+  border-radius: 8px;
+  transition: all 0.3s ease;
 }
 
 .comment-header {
@@ -212,7 +220,7 @@
 
 .material-icons.share {
   color: #4caf50;
-}
+} 
 
 .reply-form {
   margin-top: 0.5rem;
@@ -311,113 +319,4 @@
 
 .icon-button.reply:hover {
   color: #2563eb;
-}
-
-.interaction-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border: none;
-  background: none;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-radius: 20px;
-}
-
-.interaction-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  color: #1a73e8;
-}
-
-.interaction-button.liked {
-  color: #e91e63;
-}
-
-.interaction-button svg {
-  font-size: 1.2rem;
-}
-
-/* Modal styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: white;
-  padding: 24px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.modal-content h3 {
-  margin: 0 0 16px;
-  color: #333;
-}
-
-.modal-content textarea {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  resize: vertical;
-  font-family: inherit;
-  font-size: 14px;
-  margin-bottom: 16px;
-}
-
-.modal-content textarea:focus {
-  outline: none;
-  border-color: #1a73e8;
-  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.modal-actions button {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.modal-actions button:not(.primary) {
-  background: none;
-  color: #666;
-}
-
-.modal-actions button:not(.primary):hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.modal-actions button.primary {
-  background-color: #1a73e8;
-  color: white;
-}
-
-.modal-actions button.primary:hover {
-  background-color: #1557b0;
-}
-
-.modal-actions button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
 } 
