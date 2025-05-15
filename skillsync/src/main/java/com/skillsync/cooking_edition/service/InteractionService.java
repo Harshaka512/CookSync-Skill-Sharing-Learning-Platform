@@ -114,31 +114,58 @@ public class InteractionService {
             comment.setParentCommentId(parentCommentId);
             parentComment.addReply(comment.getId());
             commentRepository.save(parentComment);
+            logger.info("Added reply to parent comment: {}", parentCommentId);
         }
 
         Comment savedComment = commentRepository.save(comment);
+        logger.info("Saved comment: {}", savedComment.getId());
 
         // Update post comment count
         post.setComments(post.getComments() + 1);
         postRepository.save(post);
+        logger.info("Updated post comment count: {}", post.getComments());
 
         // Create notification
+        String notificationUserId;
+        String notificationMessage;
+        Notification.NotificationType notificationType;
+
+        if (parentCommentId != null) {
+            // This is a reply, notify the parent comment's author
+            Comment parentComment = commentRepository.findById(parentCommentId).get();
+            notificationUserId = parentComment.getUserId();
+            notificationMessage = user.getName() + " replied to your comment";
+            notificationType = Notification.NotificationType.REPLY;
+            logger.info("Creating reply notification for comment author: {}", notificationUserId);
+        } else {
+            // This is a regular comment, notify the post owner
+            notificationUserId = post.getUserId();
+            notificationMessage = user.getName() + " commented on your post";
+            notificationType = Notification.NotificationType.COMMENT;
+            logger.info("Creating comment notification for post owner: {}", notificationUserId);
+        }
+
+        // Don't notify if the user is commenting on their own post/comment
+        if (!notificationUserId.equals(userId)) {
+            try {
         Notification notification = new Notification();
-        notification.setUserId(parentCommentId != null ? 
-            commentRepository.findById(parentCommentId).get().getUserId() : 
-            post.getUserId());
+                notification.setUserId(notificationUserId);
         notification.setSenderId(userId);
         notification.setSenderName(user.getName());
-        notification.setMessage(user.getName() + (parentCommentId != null ? 
-            " replied to your comment" : " commented on your post"));
-        notification.setType(parentCommentId != null ? 
-            Notification.NotificationType.REPLY : 
-            Notification.NotificationType.COMMENT);
+                notification.setMessage(notificationMessage);
+                notification.setType(notificationType);
         notification.setRelatedPostId(postId);
-        notification.setRelatedCommentId(savedComment.getId());
+                notification.setRelatedCommentId(savedComment.getId());
         notification.setCreatedAt(LocalDateTime.now());
         notification.setRead(false);
-        notificationRepository.save(notification);
+                Notification savedNotification = notificationRepository.save(notification);
+                logger.info("Created notification: {} for user: {}", savedNotification.getId(), notificationUserId);
+            } catch (Exception e) {
+                logger.error("Failed to create notification: {}", e.getMessage(), e);
+            }
+        } else {
+            logger.info("Skipping notification - user commented on their own content");
+        }
 
         return savedComment;
     }
