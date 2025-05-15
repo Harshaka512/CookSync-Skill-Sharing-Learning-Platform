@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import Post from './Post';
 import '../styles/Community.css';
+import { useAuth } from '../contexts/AuthContext';
 
 const Community = () => {
   const [posts, setPosts] = useState([]);
@@ -11,6 +12,7 @@ const Community = () => {
   const postId = searchParams.get('postId');
   const highlightType = searchParams.get('type');
   const commentId = searchParams.get('commentId');
+  const { user } = useAuth();
 
   const fetchPosts = async () => {
     try {
@@ -80,9 +82,20 @@ const Community = () => {
     <div className="community">
       <h1>Community Posts</h1>
       <div className="posts-grid">
-        {posts.map(post => (
-          <Post key={post.id} post={post} onUpdate={fetchPosts} />
-        ))}
+        {posts.length > 0 ? (
+          posts.map(post => (
+            <Post key={post.id} post={post} onUpdate={fetchPosts} />
+          ))
+        ) : user ? (
+          <div className="no-posts-message">
+            <p>No posts available. This may be because some users have set their profiles to private.</p>
+            <p>Follow users to see their private posts.</p>
+          </div>
+        ) : (
+          <div className="no-posts-message">
+            <p>No posts available. Sign in to see more content.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -57,9 +57,16 @@ const UserProfile = () => {
     try {
       setLoading(true);
       const response = await axios.get(`/api/posts/user/${userId}`);
-      setPosts(response.data);
+      if (response.data.message) {
+        setPosts([]);
+        setError(response.data.message);
+      } else {
+        setPosts(response.data.posts || []);
+        setError(null);
+      }
     } catch (error) {
       console.error('Error fetching user posts:', error);
+      setError('Failed to load posts. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -220,8 +227,29 @@ const UserProfile = () => {
           <Typography variant="h4" gutterBottom>
             Posts
           </Typography>
-          {canViewPosts ? (
-            posts.length === 0 ? (
+          {error ? (
+            <Paper elevation={3} sx={{ p: 5, textAlign: 'center', bgcolor: '#f9f9f9' }}>
+              <LockIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h5" color="text.secondary" gutterBottom>
+                {error}
+              </Typography>
+              <Typography variant="body1" color="text.secondary" paragraph>
+                Follow this account to see their posts and cooking inspiration
+              </Typography>
+              {!isOwnProfile && !isFollowing && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  startIcon={<PersonAddIcon />}
+                  onClick={handleFollow}
+                  sx={{ mt: 2 }}
+                >
+                  Follow {profile.name}
+                </Button>
+              )}
+            </Paper>
+          ) : posts.length === 0 ? (
               <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
                 <Typography variant="h6" color="text.secondary">
                   No posts yet.
@@ -256,17 +284,6 @@ const UserProfile = () => {
                   </Grid>
                 ))}
               </Grid>
-            )
-          ) : (
-            <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
-              <LockIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" color="text.secondary">
-                This account is private
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Follow this account to see their posts
-              </Typography>
-            </Paper>
           )}
         </Grid>
       </Grid>
