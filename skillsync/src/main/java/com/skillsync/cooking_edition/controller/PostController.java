@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +26,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.skillsync.cooking_edition.model.Post;
+import com.skillsync.cooking_edition.model.User;
 import com.skillsync.cooking_edition.repository.PostRepository;
+import com.skillsync.cooking_edition.repository.UserRepository;
 import javax.media.Manager;
 import javax.media.MediaLocator;
 import javax.media.Player;
@@ -40,43 +43,100 @@ public class PostController {
     @Autowired
     private PostRepository postRepository;
     
+    @Autowired
+    private UserRepository userRepository;
+    
     @Value("${upload.path:uploads}")
     private String uploadPath;
 
     private static final int MAX_IMAGES = 3;
     private static final double MAX_VIDEO_DURATION_SECONDS = 300.0; // 5 minutes
 
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getUserPosts(@PathVariable String userId) {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            final String currentUserId = authentication != null && authentication.getPrincipal() instanceof OAuth2User
+                ? ((OAuth2User) authentication.getPrincipal()).getName()
+                : null;
+
+            // Get the target user
+            User targetUser = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            // Check if the profile is private and current user is not following
+            if (targetUser.isPrivate() && (currentUserId == null || !targetUser.getFollowing().contains(currentUserId))) {
+                return ResponseEntity.ok(new ArrayList<>());
+            }
+
+            // Get user's posts and sort by creation date in descending order
+            List<Post> posts = postRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            return ResponseEntity.ok(posts);
+        } catch (Exception e) {
+            logger.error("Error fetching user posts", e);
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch user posts"));
+        }
+    }
+
     @GetMapping
     public ResponseEntity<List<Post>> listPosts() {
         try {
             logger.info("Attempting to fetch all posts from database");
             
-            // First try to get all posts without ordering
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            final String currentUserId = authentication != null && authentication.getPrincipal() instanceof OAuth2User
+                ? ((OAuth2User) authentication.getPrincipal()).getName()
+                : null;
+            
+            // Get all posts
             List<Post> allPosts = postRepository.findAll();
-            logger.info("Total posts in database (using findAll): {}", allPosts.size());
             
-            // If we have posts but they're not showing up with ordering, return them directly
-            if (!allPosts.isEmpty()) {
-                logger.info("Returning all posts without ordering");
-                return ResponseEntity.ok(allPosts);
-            }
+            // Filter posts based on privacy settings
+            List<Post> visiblePosts = allPosts.stream()
+                .filter(post -> {
+                    User postUser = userRepository.findById(post.getUserId())
+                            .orElseThrow(() -> new RuntimeException("User not found"));
+                    
+                    // Show post if:
+                    // 1. User's profile is public
+                    // 2. Current user is the post owner
+                    // 3. Current user is following the post owner
+                    return !postUser.isPrivate() || 
+                           (currentUserId != null && currentUserId.equals(post.getUserId())) ||
+                           (currentUserId != null && postUser.getFollowing().contains(currentUserId));
+                })
+                .collect(Collectors.toList());
             
-            // Otherwise try to get posts ordered by creation date
-            List<Post> posts = postRepository.findAllByOrderByCreatedAtDesc();
-            logger.info("Successfully fetched {} posts from database (using findAllByOrderByCreatedAtDesc)", posts.size());
-            
-            if (posts.isEmpty()) {
-                logger.warn("No posts found in the database");
-            } else {
-                logger.debug("First post details: id={}, title={}, userId={}, createdAt={}", 
-                    posts.get(0).getId(), 
-                    posts.get(0).getTitle(), 
-                    posts.get(0).getUserId(),
-                    posts.get(0).getCreatedAt());
-            }
-            return ResponseEntity.ok(posts);
+            logger.info("Successfully fetched {} visible posts from database", visiblePosts.size());
+            return ResponseEntity.ok(visiblePosts);
         } catch (Exception e) {
             logger.error("Error fetching posts from database: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body(null);
+        }
+    }
+
+    @GetMapping("/trending")
+    public ResponseEntity<List<Post>> getTrendingPosts() {
+        try {
+            logger.info("Fetching trending posts");
+            
+            // Get all posts and sort by engagement (likes + comments)
+            List<Post> allPosts = postRepository.findAll();
+            List<Post> trendingPosts = allPosts.stream()
+                .sorted((a, b) -> {
+                    int aEngagement = (a.getLikes() != null ? a.getLikes() : 0) + 
+                                    (a.getComments() != null ? a.getComments() : 0);
+                    int bEngagement = (b.getLikes() != null ? b.getLikes() : 0) + 
+                                    (b.getComments() != null ? b.getComments() : 0);
+                    return bEngagement - aEngagement;
+                })
+                .limit(5) // Get top 5 trending posts
+                .collect(Collectors.toList());
+            
+            logger.info("Found {} trending posts", trendingPosts.size());
+            return ResponseEntity.ok(trendingPosts);
+        } catch (Exception e) {
+            logger.error("Error fetching trending posts: {}", e.getMessage(), e);
             return ResponseEntity.status(500).body(null);
         }
     }
@@ -88,7 +148,7 @@ public class PostController {
             OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
             String userId = oauth2User.getName();
             logger.info("Fetching posts for user: {}", userId);
-            List<Post> posts = postRepository.findByUserId(userId);
+            List<Post> posts = postRepository.findByUserIdOrderByCreatedAtDesc(userId);
             logger.info("Found {} posts for user {}", posts.size(), userId);
             return ResponseEntity.ok(posts);
         }
@@ -112,64 +172,67 @@ public class PostController {
         logger.info("Creating new post with title: {}", title);
         
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof OAuth2User) {
-            OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
-            String userId = oauth2User.getName();
-            logger.info("Creating post for user: {}", userId);
-            
-            List<String> mediaUrls = new ArrayList<>();
-            
-            // Handle file uploads if present
-            if (media != null && !media.isEmpty()) {
-                logger.info("Processing {} media files", media.size());
-                // Validate number of images
-                if (mediaType != null && mediaType.equals("image") && media.size() > MAX_IMAGES) {
-                    logger.warn("Too many images uploaded: {}", media.size());
-                    return ResponseEntity.badRequest().body("Maximum " + MAX_IMAGES + " images allowed");
-                }
+        if (authentication == null || !(authentication.getPrincipal() instanceof OAuth2User)) {
+            logger.warn("User not authenticated when creating post");
+            return ResponseEntity.status(401).body("User not authenticated");
+        }
 
-                try {
-                    // Create upload directory if it doesn't exist
-                    Path uploadDir = Paths.get(uploadPath);
-                    if (!Files.exists(uploadDir)) {
-                        Files.createDirectories(uploadDir);
-                        logger.info("Created upload directory: {}", uploadPath);
-                    }
-                    
-                    for (MultipartFile file : media) {
-                        // Generate a unique filename
-                        String originalFilename = file.getOriginalFilename();
-                        String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-                        String filename = UUID.randomUUID().toString() + extension;
-                        
-                        // Save the file
-                        Path filePath = uploadDir.resolve(filename);
-                        Files.copy(file.getInputStream(), filePath);
-                        logger.info("Saved media file: {}", filename);
-                        
-                        // Add the media URL to the list
-                        mediaUrls.add("/uploads/" + filename);
-                    }
-                    
-                    // Set media type based on file type if not provided
-                    if (mediaType == null || mediaType.isEmpty()) {
-                        String firstFileType = media.get(0).getContentType();
-                        if (firstFileType != null && firstFileType.startsWith("image/")) {
-                            mediaType = "image";
-                        } else if (firstFileType != null && firstFileType.startsWith("video/")) {
-                            mediaType = "video";
-                            if (!validateVideoDuration(media.get(0))) {
-                                return ResponseEntity.badRequest().body("Video duration exceeds " + MAX_VIDEO_DURATION_SECONDS + " seconds");
-                            }
-                        }
-                        logger.info("Detected media type: {}", mediaType);
-                    }
-                } catch (IOException e) {
-                    logger.error("Failed to upload media", e);
-                    return ResponseEntity.internalServerError().body("Failed to upload media: " + e.getMessage());
-                }
+        OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
+        String userId = oauth2User.getName();
+        logger.info("Creating post for user: {}", userId);
+        
+        List<String> mediaUrls = new ArrayList<>();
+        
+        // Handle file uploads if present
+        if (media != null && !media.isEmpty()) {
+            logger.info("Processing {} media files", media.size());
+            // Validate number of images
+            if (mediaType != null && mediaType.equals("image") && media.size() > MAX_IMAGES) {
+                logger.warn("Too many images uploaded: {}", media.size());
+                return ResponseEntity.badRequest().body("Maximum " + MAX_IMAGES + " images allowed");
             }
-            
+
+            try {
+                // Create upload directory if it doesn't exist
+                Path uploadDir = Paths.get(uploadPath);
+                if (!Files.exists(uploadDir)) {
+                    Files.createDirectories(uploadDir);
+                }
+                
+                for (MultipartFile file : media) {
+                    // Generate a unique filename
+                    String originalFilename = file.getOriginalFilename();
+                    String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+                    String filename = UUID.randomUUID().toString() + extension;
+                    
+                    // Save the file
+                    Path filePath = uploadDir.resolve(filename);
+                    Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+                    
+                    // Add the media URL to the list
+                    mediaUrls.add("/uploads/" + filename);
+                }
+                
+                // Set media type based on file type if not provided
+                if (mediaType == null || mediaType.isEmpty()) {
+                    String firstFileType = media.get(0).getContentType();
+                    if (firstFileType != null && firstFileType.startsWith("image/")) {
+                        mediaType = "image";
+                    } else if (firstFileType != null && firstFileType.startsWith("video/")) {
+                        mediaType = "video";
+                        if (!validateVideoDuration(media.get(0))) {
+                            return ResponseEntity.badRequest().body("Video duration exceeds " + MAX_VIDEO_DURATION_SECONDS + " seconds");
+                        }
+                    }
+                    logger.info("Detected media type: {}", mediaType);
+                }
+            } catch (IOException e) {
+                logger.error("Failed to upload media", e);
+                return ResponseEntity.status(500).body("Failed to upload media: " + e.getMessage());
+            }
+        }
+        
+        try {
             Post post = new Post();
             post.setTitle(title);
             post.setDescription(description);
@@ -188,18 +251,13 @@ public class PostController {
             post.setLikes(0);
             post.setComments(0);
             
-            try {
-                Post savedPost = postRepository.save(post);
-                logger.info("Successfully created post with ID: {}", savedPost.getId());
-                return ResponseEntity.ok(savedPost);
-            } catch (Exception e) {
-                logger.error("Error saving post: {}", e.getMessage(), e);
-                return ResponseEntity.internalServerError().body("Failed to save post: " + e.getMessage());
-            }
+            Post savedPost = postRepository.save(post);
+            logger.info("Successfully created post with ID: {}", savedPost.getId());
+            return ResponseEntity.ok(savedPost);
+        } catch (Exception e) {
+            logger.error("Error saving post: {}", e.getMessage(), e);
+            return ResponseEntity.status(500).body("Failed to save post: " + e.getMessage());
         }
-        
-        logger.warn("User not authenticated when creating post");
-        return ResponseEntity.badRequest().body("User not authenticated");
     }
 
     @GetMapping("/{id}")
@@ -355,6 +413,35 @@ public class PostController {
             logger.error("Error testing MongoDB connection: {}", e.getMessage(), e);
             result.put("error", e.getMessage());
             return ResponseEntity.status(500).body(result);
+        }
+    }
+
+    @GetMapping("/following")
+    public ResponseEntity<?> getFollowingPosts() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getPrincipal() instanceof OAuth2User) {
+                OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
+                String currentUserId = oauth2User.getName();
+                
+                User currentUser = userRepository.findById(currentUserId)
+                        .orElseThrow(() -> new RuntimeException("User not found"));
+                
+                // Get list of followed users
+                List<String> following = currentUser.getFollowing();
+                if (following == null || following.isEmpty()) {
+                    return ResponseEntity.ok(new ArrayList<>());
+                }
+                
+                // Get posts from followed users
+                List<Post> followingPosts = postRepository.findByUserIdInOrderByCreatedAtDesc(following);
+                
+                return ResponseEntity.ok(followingPosts);
+            }
+            return ResponseEntity.status(401).body(Map.of("error", "User not authenticated"));
+        } catch (Exception e) {
+            logger.error("Error fetching following posts", e);
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch following posts"));
         }
     }
 
