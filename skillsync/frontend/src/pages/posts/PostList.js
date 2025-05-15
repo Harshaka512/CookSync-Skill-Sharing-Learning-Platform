@@ -282,32 +282,48 @@ const PostList = () => {
                 <Grid item xs={12} md={6} lg={4} key={post.id}>
                   <Card>
                     {post.mediaUrls && post.mediaUrls.length > 0 && (
-                      post.mediaType === 'image' ? (
-                        <CardMedia
-                          component="img"
-                          height="300"
-                          image={post.mediaUrls[0]}
-                          alt={post.title}
-                          sx={{ 
-                            objectFit: 'contain',
-                            backgroundColor: '#f5f5f5',
-                            maxHeight: '300px',
-                            width: '100%'
-                          }}
-                          onError={(e) => {
-                            console.error('Error loading image:', post.mediaUrls[0]);
-                            e.target.src = '/placeholder-image.jpg';
-                          }}
-                        />
-                      ) : post.mediaType === 'video' ? (
-                        <CardMedia
-                          component="video"
-                          height="200"
-                          image={post.mediaUrls[0]}
-                          controls
-                          sx={{ objectFit: 'cover' }}
-                        />
-                      ) : null
+                      <Grid container spacing={1}>
+                        {post.mediaUrls.map((url, index) => {
+                          const isVideo = url.match(/\.(mp4|webm|ogg)$/i);
+                          return (
+                            <Grid item xs={12} sm={6} md={4} key={index}>
+                              {!isVideo ? (
+                                <CardMedia
+                                  component="img"
+                                  height="200"
+                                  image={url}
+                                  alt={`${post.title} - Image ${index + 1}`}
+                                  sx={{ 
+                                    objectFit: 'cover',
+                                    backgroundColor: '#f5f5f5',
+                                    height: '200px',
+                                    width: '100%'
+                                  }}
+                                  onError={(e) => {
+                                    console.error('Error loading image:', url);
+                                    e.target.src = '/placeholder-image.jpg';
+                                  }}
+                                />
+                              ) : (
+                                <CardMedia
+                                  component="video"
+                                  height="200"
+                                  controls
+                                  sx={{ 
+                                    objectFit: 'cover',
+                                    backgroundColor: '#f5f5f5',
+                                    height: '200px',
+                                    width: '100%'
+                                  }}
+                                >
+                                  <source src={url} type="video/mp4" />
+                                  Your browser does not support the video tag.
+                                </CardMedia>
+                              )}
+                            </Grid>
+                          );
+                        })}
+                      </Grid>
                     )}
                     <CardContent>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
