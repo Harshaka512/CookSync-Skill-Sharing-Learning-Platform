@@ -19,6 +19,7 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import CommentIcon from '@mui/icons-material/Comment';
 import ReplyIcon from '@mui/icons-material/Reply';
 import './NotificationList.css';
+import { toast } from 'react-hot-toast';
 
 const NotificationList = () => {
   const { user } = useAuth();
@@ -27,16 +28,23 @@ const NotificationList = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(true);
   const MAX_RETRIES = 3;
 
   useEffect(() => {
     if (user && user.id) {
+      setUnreadCount(0); // Reset count on mount
       fetchNotifications();
-      // Set up polling for new notifications
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user && user.id) {
+      // Set up polling for new notifications after initial fetch
       const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user, notifications.length]); // Only restart polling if notifications change
 
   const fetchNotifications = async () => {
     try {
@@ -45,6 +53,7 @@ const NotificationList = () => {
       // First verify the user object
       if (!user || !user.id) {
         console.error('User object is invalid:', user);
+        setUnreadCount(0); // Reset count if user is invalid
         return;
       }
 
@@ -63,6 +72,7 @@ const NotificationList = () => {
 
         if (!Array.isArray(response.data)) {
           console.error('Invalid response format for', user.email, ':', response.data);
+          setUnreadCount(0); // Reset count if response is invalid
           return;
         }
 
@@ -81,10 +91,16 @@ const NotificationList = () => {
 
         console.log('Valid notifications count for', user.email, ':', validNotifications.length);
         setNotifications(validNotifications);
-        setUnreadCount(validNotifications.filter(n => !n.read).length);
+        
+        // Update unread count only if there are valid unread notifications
+        const unreadCount = validNotifications.filter(n => !n.read).length;
+        setUnreadCount(unreadCount > 0 ? unreadCount : 0);
+        console.log('Unread notifications count:', unreadCount);
+        
         setRetryCount(0); // Reset retry count on success
       } catch (mainError) {
         console.error('Error with main endpoint for', user.email, ':', mainError);
+        setUnreadCount(0); // Reset count on error
         
         // Try the fallback endpoint
         try {
@@ -111,17 +127,24 @@ const NotificationList = () => {
             });
             console.log('Fallback notifications count for', user.email, ':', validNotifications.length);
             setNotifications(validNotifications);
-            setUnreadCount(validNotifications.filter(n => !n.read).length);
+            
+            // Update unread count only if there are valid unread notifications
+            const unreadCount = validNotifications.filter(n => !n.read).length;
+            setUnreadCount(unreadCount > 0 ? unreadCount : 0);
+            console.log('Unread notifications count:', unreadCount);
+            
             setRetryCount(0);
             return;
           }
         } catch (fallbackError) {
           console.error('Error with fallback endpoint for', user.email, ':', fallbackError);
+          setUnreadCount(0); // Reset count if both endpoints fail
           throw mainError; // Throw the original error if both endpoints fail
         }
       }
     } catch (error) {
       console.error('Error fetching notifications for', user.email, ':', error);
+      setUnreadCount(0); // Reset count on any error
       console.error('Error details:', {
         user: {
           id: user.id,
@@ -146,8 +169,6 @@ const NotificationList = () => {
       } else {
         setRetryCount(0); // Reset retry count
       }
-      // Don't show error to user for notification badge
-      // Just keep existing notifications
     }
   };
 
@@ -162,30 +183,39 @@ const NotificationList = () => {
 
   const handleNotificationClick = async (notification) => {
     try {
-      // Mark as read
-      await axios.put(`/api/notifications/${notification.id}/read`, null, {
-        withCredentials: true,
-        headers: {
-          'Authorization': `Bearer ${user.id}`
+      // Mark notification as read
+      await axios.put(`/api/notifications/${notification.id}/read`);
+      
+      // Update local state
+      setNotifications(prevNotifications =>
+        prevNotifications.map(n =>
+          n.id === notification.id ? { ...n, read: true } : n
+        )
+      );
+
+      // Update unread count
+      setUnreadCount(prev => Math.max(0, prev - 1));
+
+      // Handle navigation based on notification type
+      if (notification.type === 'LIKE' || notification.type === 'COMMENT' || notification.type === 'REPLY') {
+        // Close the notification menu
+        setShowNotifications(false);
+        
+        // Navigate to the post with the comment ID if it's a reply
+        if (notification.type === 'REPLY' && notification.relatedCommentId) {
+          // Navigate to the post with both postId and commentId
+          navigate(`/posts/${notification.relatedPostId}?commentId=${notification.relatedCommentId}&type=reply`);
+        } else if (notification.type === 'COMMENT') {
+          // For regular comments, just navigate to the post
+          navigate(`/posts/${notification.relatedPostId}?type=comment`);
+        } else {
+          // For likes, just navigate to the post
+          navigate(`/posts/${notification.relatedPostId}`);
         }
-      });
-
-      // Close the notification menu first
-      handleClose();
-
-      // Navigate based on notification type
-      if (notification.type === 'LIKE') {
-        navigate(`/community?postId=${notification.relatedPostId}&type=like`);
-      } else if (notification.type === 'COMMENT') {
-        navigate(`/community?postId=${notification.relatedPostId}&type=comment`);
-      } else if (notification.type === 'REPLY') {
-        navigate(`/community?postId=${notification.relatedPostId}&type=reply&commentId=${notification.relatedCommentId}`);
       }
-
-      // Fetch notifications after a short delay to ensure navigation is complete
-      setTimeout(fetchNotifications, 500);
     } catch (error) {
       console.error('Error handling notification click:', error);
+      toast.error('Failed to process notification');
     }
   };
 
@@ -197,7 +227,16 @@ const NotificationList = () => {
           'Authorization': `Bearer ${user.id}`
         }
       });
-      fetchNotifications();
+      
+      // Update notifications and unread count immediately
+      setNotifications(prevNotifications => {
+        const updatedNotifications = prevNotifications.map(n => ({ ...n, read: true }));
+        setUnreadCount(0);
+        return updatedNotifications;
+      });
+
+      // Fetch notifications after a short delay to ensure everything is in sync
+      setTimeout(fetchNotifications, 500);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
