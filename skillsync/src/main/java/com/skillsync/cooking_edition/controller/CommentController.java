@@ -24,16 +24,27 @@ public class CommentController {
         return ResponseEntity.ok(comments);
     }
 
+    @GetMapping("/{commentId}/replies")
+    public ResponseEntity<List<Comment>> getCommentReplies(
+            @PathVariable String postId,
+            @PathVariable String commentId) {
+        List<Comment> replies = interactionService.getCommentReplies(commentId);
+        return ResponseEntity.ok(replies);
+    }
+
     @PostMapping
     public ResponseEntity<Comment> addComment(
             @PathVariable String postId,
-            @RequestBody Comment comment,
+            @RequestBody Map<String, String> request,
             @AuthenticationPrincipal OAuth2User principal) {
         if (principal == null) {
             return ResponseEntity.badRequest().build();
         }
         String userId = principal.getName();
-        Comment savedComment = interactionService.addComment(postId, userId, comment.getContent());
+        String content = request.get("content");
+        String parentCommentId = request.get("parentCommentId");
+        
+        Comment savedComment = interactionService.addComment(postId, userId, content, parentCommentId);
         return ResponseEntity.ok(savedComment);
     }
 

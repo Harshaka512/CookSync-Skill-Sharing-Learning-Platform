@@ -19,7 +19,7 @@ public class Notification {
     private LocalDateTime createdAt;
 
     public enum NotificationType {
-        LIKE, COMMENT, REPLY
+        LIKE, COMMENT, REPLY, FOLLOW, REPOST
     }
 
     public String getId() {

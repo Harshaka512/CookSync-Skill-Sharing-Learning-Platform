@@ -39,18 +39,27 @@ public class InteractionController {
             @PathVariable String postId,
             @RequestParam String userId) {
         try {
-            logger.info("Toggling like for post: {} and user: {}", postId, userId);
+            logger.info("Received like request - postId: {}, userId: {}", postId, userId);
             
             // Find post
             Post post = postRepository.findById(postId)
-                    .orElseThrow(() -> new RuntimeException("Post not found: " + postId));
+                    .orElseThrow(() -> {
+                        logger.error("Post not found with id: {}", postId);
+                        return new RuntimeException("Post not found: " + postId);
+                    });
+            logger.info("Found post: {}", post.getId());
             
             // Find user
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+                    .orElseThrow(() -> {
+                        logger.error("User not found with id: {}", userId);
+                        return new RuntimeException("User not found: " + userId);
+                    });
+            logger.info("Found user: {}", user.getId());
             
             // Check if like exists
             Like existingLike = likeRepository.findByPostIdAndUserId(postId, userId);
+            logger.info("Existing like found: {}", existingLike != null);
             
             if (existingLike != null) {
                 // Unlike
@@ -84,7 +93,7 @@ public class InteractionController {
 
             // Save updated post
             postRepository.save(post);
-            logger.info("Successfully toggled like for post: {} and user: {}", postId, userId);
+            logger.info("Successfully saved post with updated like count: {}", post.getLikes());
             
             // Return success response with updated like count
             Map<String, Object> response = new HashMap<>();
@@ -92,13 +101,14 @@ public class InteractionController {
             response.put("liked", existingLike == null);
             response.put("likeCount", post.getLikes());
             
+            logger.info("Sending response: {}", response);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error toggling like for post: {} and user: {}", postId, userId, e);
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("message", e.getMessage());
-            return ResponseEntity.status(500).body(errorResponse);
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 
@@ -109,8 +119,15 @@ public class InteractionController {
             @RequestParam String userName,
             @RequestParam(required = false) String userPicture,
             @RequestBody Map<String, String> requestBody) {
+        try {
+            logger.info("Received comment request - postId: {}, userId: {}, userName: {}", postId, userId, userName);
+            
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new RuntimeException("Post not found"));
+                    .orElseThrow(() -> {
+                        logger.error("Post not found with id: {}", postId);
+                        return new RuntimeException("Post not found: " + postId);
+                    });
+            logger.info("Found post: {} with owner: {}", post.getId(), post.getUserId());
 
         Comment comment = new Comment();
         comment.setPostId(postId);
@@ -121,12 +138,17 @@ public class InteractionController {
         comment.setCreatedAt(LocalDateTime.now());
         comment.setUpdatedAt(LocalDateTime.now());
         Comment savedComment = commentRepository.save(comment);
+            logger.info("Saved comment: {}", savedComment.getId());
 
         // Update post comment count
         post.setComments(post.getComments() + 1);
         postRepository.save(post);
+            logger.info("Updated post comment count: {}", post.getComments());
 
         // Create notification
+            if (!post.getUserId().equals(userId)) { // Don't notify if user commented on their own post
+                logger.info("Creating notification for post owner: {} (commenter: {})", post.getUserId(), userId);
+                try {
         Notification notification = new Notification();
         notification.setUserId(post.getUserId());
         notification.setSenderId(userId);
@@ -137,9 +159,20 @@ public class InteractionController {
         notification.setRelatedCommentId(savedComment.getId());
         notification.setCreatedAt(LocalDateTime.now());
         notification.setRead(false);
-        notificationRepository.save(notification);
+                    Notification savedNotification = notificationRepository.save(notification);
+                    logger.info("Created notification: {} for user: {}", savedNotification.getId(), post.getUserId());
+                } catch (Exception e) {
+                    logger.error("Failed to create notification: {}", e.getMessage(), e);
+                }
+            } else {
+                logger.info("Skipping notification - user commented on their own post");
+            }
 
         return ResponseEntity.ok(savedComment);
+        } catch (Exception e) {
+            logger.error("Error adding comment for post: {} and user: {}", postId, userId, e);
+            throw new RuntimeException("Failed to add comment: " + e.getMessage());
+        }
     }
 
     @GetMapping("/posts/{postId}/comments")
@@ -150,8 +183,35 @@ public class InteractionController {
 
     @GetMapping("/users/{userId}/notifications")
     public ResponseEntity<List<Notification>> getUserNotifications(@PathVariable String userId) {
+        try {
+            logger.info("Fetching notifications for user: {}", userId);
+            
+            // Verify user exists
+            if (!userRepository.existsById(userId)) {
+                logger.error("User not found with id: {}", userId);
+                return ResponseEntity.status(404).build();
+            }
+            
         List<Notification> notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+            logger.info("Found {} notifications for user: {}", notifications.size(), userId);
+            
+            if (notifications.isEmpty()) {
+                logger.info("No notifications found in database for user: {}", userId);
+            } else {
+                notifications.forEach(notification -> 
+                    logger.info("Notification: id={}, type={}, sender={}, created={}", 
+                        notification.getId(), 
+                        notification.getType(),
+                        notification.getSenderName(),
+                        notification.getCreatedAt())
+                );
+            }
         return ResponseEntity.ok(notifications);
+        } catch (Exception e) {
+            logger.error("Error fetching notifications for user: {}", userId, e);
+            logger.error("Stack trace:", e);
+            return ResponseEntity.status(500).build();
+        }
     }
 
     @GetMapping("/users/{userId}/notifications/unread")
