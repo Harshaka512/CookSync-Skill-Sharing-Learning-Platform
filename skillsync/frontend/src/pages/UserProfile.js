@@ -36,6 +36,7 @@ const UserProfile = () => {
   const [isFollowing, setIsFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [canViewPosts, setCanViewPosts] = useState(false);
 
   const fetchUserProfile = useCallback(async () => {
     try {
@@ -44,6 +45,8 @@ const UserProfile = () => {
       setProfile(response.data);
       setFollowerCount(response.data.followerCount || 0);
       setFollowingCount(response.data.followingCount || 0);
+      setIsFollowing(response.data.isFollowing || false);
+      setCanViewPosts(response.data.canViewPosts || false);
       setError(null);
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -54,6 +57,10 @@ const UserProfile = () => {
   }, [userId]);
 
   const fetchUserPosts = useCallback(async () => {
+    if (!canViewPosts) {
+      setPosts([]);
+      return;
+    }
     try {
       setLoading(true);
       const response = await axios.get(`/api/posts/user/${userId}`);
@@ -70,22 +77,13 @@ const UserProfile = () => {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
-
-  const checkFollowStatus = useCallback(async () => {
-    if (!user) return;
-    try {
-      const response = await axios.get(`/api/users/${userId}/follow-status`);
-      setIsFollowing(response.data.isFollowing);
-    } catch (error) {
-      console.error('Error checking follow status:', error);
-    }
-  }, [userId, user]);
+  }, [userId, canViewPosts]);
 
   const handleFollow = async () => {
     try {
       await axios.post(`/api/users/${userId}/follow`);
       setIsFollowing(true);
+      setCanViewPosts(true);
       setFollowerCount(prev => prev + 1);
       // Refresh posts after following
       fetchUserPosts();
@@ -98,7 +96,9 @@ const UserProfile = () => {
     try {
       await axios.delete(`/api/users/${userId}/follow`);
       setIsFollowing(false);
+      setCanViewPosts(false);
       setFollowerCount(prev => prev - 1);
+      setPosts([]);
     } catch (error) {
       console.error('Error unfollowing user:', error);
     }
@@ -117,14 +117,16 @@ const UserProfile = () => {
   
   useEffect(() => {
     const loadData = async () => {
-      await Promise.all([
-        fetchUserProfile(),
-        fetchUserPosts(),
-        checkFollowStatus()
-      ]);
+      await fetchUserProfile();
     };
     loadData();
-  }, [fetchUserProfile, fetchUserPosts, checkFollowStatus]);
+  }, [fetchUserProfile]);
+
+  useEffect(() => {
+    if (canViewPosts) {
+      fetchUserPosts();
+    }
+  }, [canViewPosts, fetchUserPosts]);
 
   if (loading) {
     return (
@@ -151,12 +153,11 @@ const UserProfile = () => {
   }
 
   const isOwnProfile = user && user.id === userId;
-  const canViewPosts = !profile.isPrivate || isFollowing || isOwnProfile;
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       <Grid container spacing={4}>
-        {/* Profile Section */}
+        {/* Profile Section - Always visible */}
         <Grid item xs={12} md={4}>
           <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
             <Avatar
@@ -227,11 +228,11 @@ const UserProfile = () => {
           <Typography variant="h4" gutterBottom>
             Posts
           </Typography>
-          {error ? (
+          {!canViewPosts ? (
             <Paper elevation={3} sx={{ p: 5, textAlign: 'center', bgcolor: '#f9f9f9' }}>
               <LockIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
               <Typography variant="h5" color="text.secondary" gutterBottom>
-                {error}
+                This Account is Private
               </Typography>
               <Typography variant="body1" color="text.secondary" paragraph>
                 Follow this account to see their posts and cooking inspiration
@@ -250,40 +251,40 @@ const UserProfile = () => {
               )}
             </Paper>
           ) : posts.length === 0 ? (
-              <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
-                <Typography variant="h6" color="text.secondary">
-                  No posts yet.
-                </Typography>
-              </Paper>
-            ) : (
-              <Grid container spacing={3}>
-                {posts.map((post) => (
-                  <Grid item xs={12} key={post.id}>
-                    <Card sx={{ borderRadius: 2, overflow: 'hidden' }}>
-                      {post.mediaUrls && post.mediaUrls.length > 0 && (
-                        <CardMedia
-                          component="img"
-                          height="200"
-                          image={post.mediaUrls[0]}
-                          alt={post.title}
-                          sx={{ objectFit: 'cover' }}
-                        />
-                      )}
-                      <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                          {post.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" paragraph>
-                          {post.description}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Posted {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
+            <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
+              <Typography variant="h6" color="text.secondary">
+                No posts yet.
+              </Typography>
+            </Paper>
+          ) : (
+            <Grid container spacing={3}>
+              {posts.map((post) => (
+                <Grid item xs={12} key={post.id}>
+                  <Card sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                    {post.mediaUrls && post.mediaUrls.length > 0 && (
+                      <CardMedia
+                        component="img"
+                        height="200"
+                        image={post.mediaUrls[0]}
+                        alt={post.title}
+                        sx={{ objectFit: 'cover' }}
+                      />
+                    )}
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        {post.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        {post.description}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Posted {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
           )}
         </Grid>
       </Grid>
