@@ -49,6 +49,7 @@ const LearningPlanDetail = () => {
   const [error, setError] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedSubjectIndex, setSelectedSubjectIndex] = useState(null);
   const [updateData, setUpdateData] = useState({
     completedItems: {},
     subjectStatuses: {},
@@ -93,8 +94,9 @@ const LearningPlanDetail = () => {
     }
   };
 
-  const handleSubjectClick = (subject) => {
+  const handleSubjectClick = (subject, index) => {
     setSelectedSubject(subject);
+    setSelectedSubjectIndex(index);
     setUpdateData({
       completedItems: { ...plan.completedItems },
       subjectStatuses: { ...plan.subjectStatuses },
@@ -103,12 +105,12 @@ const LearningPlanDetail = () => {
     setOpenDialog(true);
   };
 
-  const handleStatusChange = (subjectId, status) => {
+  const handleStatusChange = (subjectIndex, status) => {
     setUpdateData(prev => ({
       ...prev,
       subjectStatuses: {
         ...prev.subjectStatuses,
-        [subjectId]: status,
+        [subjectIndex]: status,
       },
     }));
   };
@@ -123,10 +125,12 @@ const LearningPlanDetail = () => {
     }));
   };
 
+  // Calculate progress based only on completed subjects
   const calculateProgress = () => {
     if (!plan || !plan.subjects) return 0;
     const total = plan.subjects.length;
-    const completed = Object.values(plan.completedItems || {}).filter(Boolean).length;
+    if (total === 0) return 0;
+    const completed = plan.subjects.filter(subject => subject.status === 'COMPLETED').length;
     return (completed / total) * 100;
   };
 
@@ -264,11 +268,11 @@ const LearningPlanDetail = () => {
             <List>
               {plan.subjects.map((subject, index) => (
                 <React.Fragment key={index}>
-                  <ListItem
-                    button
-                    onClick={() => handleSubjectClick(subject)}
-                    sx={{ mb: 2 }}
-                  >
+      <ListItem
+        button
+        onClick={() => handleSubjectClick(subject, index)}
+        sx={{ mb: 2 }}
+      >
                     <ListItemIcon>
                       {subject.status === 'COMPLETED' ? (
                         <CheckCircle color="success" />
@@ -356,22 +360,22 @@ const LearningPlanDetail = () => {
             </Typography>
             <Box sx={{ mb: 3 }}>
               <Button
-                variant={updateData.subjectStatuses[selectedSubject?.id] === 'NOT_STARTED' ? 'contained' : 'outlined'}
-                onClick={() => handleStatusChange(selectedSubject?.id, 'NOT_STARTED')}
+                variant={updateData.subjectStatuses[selectedSubjectIndex] === 'NOT_STARTED' ? 'contained' : 'outlined'}
+                onClick={() => handleStatusChange(selectedSubjectIndex, 'NOT_STARTED')}
                 sx={{ mr: 1 }}
               >
                 Not Started
               </Button>
               <Button
-                variant={updateData.subjectStatuses[selectedSubject?.id] === 'IN_PROGRESS' ? 'contained' : 'outlined'}
-                onClick={() => handleStatusChange(selectedSubject?.id, 'IN_PROGRESS')}
+                variant={updateData.subjectStatuses[selectedSubjectIndex] === 'IN_PROGRESS' ? 'contained' : 'outlined'}
+                onClick={() => handleStatusChange(selectedSubjectIndex, 'IN_PROGRESS')}
                 sx={{ mr: 1 }}
               >
                 In Progress
               </Button>
               <Button
-                variant={updateData.subjectStatuses[selectedSubject?.id] === 'COMPLETED' ? 'contained' : 'outlined'}
-                onClick={() => handleStatusChange(selectedSubject?.id, 'COMPLETED')}
+                variant={updateData.subjectStatuses[selectedSubjectIndex] === 'COMPLETED' ? 'contained' : 'outlined'}
+                onClick={() => handleStatusChange(selectedSubjectIndex, 'COMPLETED')}
               >
                 Completed
               </Button>
@@ -388,19 +392,19 @@ const LearningPlanDetail = () => {
                       <ListItemIcon>
                         <Checkbox
                           edge="start"
-                          checked={updateData.completedItems[material.id] || false}
+                          checked={!!updateData.completedItems[material]}
                           onChange={() => {
                             setUpdateData(prev => ({
                               ...prev,
                               completedItems: {
                                 ...prev.completedItems,
-                                [material.id]: !prev.completedItems[material.id],
+                                [material]: !prev.completedItems[material],
                               },
                             }));
                           }}
                         />
                       </ListItemIcon>
-                      <ListItemText primary={material.name} secondary={material.description} />
+                      <ListItemText primary={material} />
                     </ListItem>
                   ))}
                 </List>
