@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.core.mapping.Field;
 
 @Document(collection = "posts")
 public class Post {
+    private String userPicture;
     @Id
     private String id;
     private String title;
@@ -183,5 +184,13 @@ public class Post {
 
     public void setComments(Integer comments) {
         this.comments = comments != null ? comments : 0;
+    }
+
+    public String getUserPicture() {
+        return userPicture;
+    }
+
+    public void setUserPicture(String userPicture) {
+        this.userPicture = userPicture;
     }
 } 

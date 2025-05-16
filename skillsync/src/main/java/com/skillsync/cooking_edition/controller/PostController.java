@@ -268,7 +268,10 @@ public class PostController {
                 for (MultipartFile file : media) {
                     // Generate a unique filename
                     String originalFilename = file.getOriginalFilename();
-                    String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+                    String extension = "";
+                    if (originalFilename != null && originalFilename.lastIndexOf(".") != -1) {
+                        extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+                    }
                     String filename = UUID.randomUUID().toString() + extension;
                     
                     // Save the file
@@ -397,7 +400,10 @@ public class PostController {
                 for (MultipartFile file : media) {
                     // Generate a unique filename
                     String originalFilename = file.getOriginalFilename();
-                    String extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+                    String extension = "";
+                    if (originalFilename != null && originalFilename.lastIndexOf(".") != -1) {
+                        extension = originalFilename.substring(originalFilename.lastIndexOf("."));
+                    }
                     String filename = UUID.randomUUID().toString() + extension;
                     
                     // Save the file
