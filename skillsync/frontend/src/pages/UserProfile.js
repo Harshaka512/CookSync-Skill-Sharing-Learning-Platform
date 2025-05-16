@@ -256,35 +256,35 @@ const UserProfile = () => {
                 </Typography>
               </Paper>
             ) : (
-              <Grid container spacing={3}>
-                {posts.map((post) => (
-                  <Grid item xs={12} key={post.id}>
-                    <Card sx={{ borderRadius: 2, overflow: 'hidden' }}>
-                      {post.mediaUrls && post.mediaUrls.length > 0 && (
-                        <CardMedia
-                          component="img"
-                          height="200"
-                          image={post.mediaUrls[0]}
-                          alt={post.title}
-                          sx={{ objectFit: 'cover' }}
-                        />
-                      )}
-                      <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                          {post.title}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary" paragraph>
-                          {post.description}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Posted {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </Grid>
-                ))}
-              </Grid>
-          )}
+    <Grid container spacing={3}>
+      {posts.map((post) => (
+        <Grid item xs={12} key={post.id}>
+          <Card sx={{ borderRadius: 2, overflow: 'hidden' }}>
+            {post.mediaUrls && post.mediaUrls.length > 0 && (
+              <CardMedia
+                component="img"
+                height="200"
+                image={post.mediaUrls[0]}
+                alt={post.title}
+                sx={{ objectFit: 'cover' }}
+              />
+            )}
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                {post.title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                {post.description}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Posted {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      ))}
+    </Grid>
+)}
         </Grid>
       </Grid>
     </Container>

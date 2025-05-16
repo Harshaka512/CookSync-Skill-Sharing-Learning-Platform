@@ -1,99 +1,287 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import api from '../services/api';
-import PostCard from '../components/PostCard';
+import {
+  Container,
+  Grid,
+  Paper,
+  Typography,
+  Box,
+  Avatar,
+  Button,
+  Divider,
+  Card,
+  CardContent,
+  CardMedia,
+  CircularProgress,
+  Alert,
+  Chip,
+  Switch,
+  FormControlLabel
+} from '@mui/material';
+import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import PersonRemoveIcon from '@mui/icons-material/PersonRemove';
+import LockIcon from '@mui/icons-material/Lock';
+import { formatDistanceToNow } from 'date-fns';
 
 const UserProfile = () => {
-    const { id } = useParams();
-    const [user, setUser] = useState(null);
-    const [posts, setPosts] = useState([]);
-    const [isFollowing, setIsFollowing] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+  const { userId } = useParams();
+  const { user } = useAuth();
+  
+  const [profile, setProfile] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [canViewPosts, setCanViewPosts] = useState(false);
 
-    useEffect(() => {
-        const fetchUserData = async () => {
-            try {
-                const [userResponse, followStatusResponse] = await Promise.all([
-                    api.get(`/api/users/${id}/profile`),
-                    api.get(`/api/users/${id}/follow-status`)
-                ]);
-                
-                setUser(userResponse.data);
-                setIsFollowing(followStatusResponse.data.isFollowing);
-                setPosts(userResponse.data.posts || []);
-            } catch (err) {
-                setError('Failed to load user profile');
-                console.error(err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+  const fetchUserProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/users/${userId}/profile`);
+      setProfile(response.data);
+      setFollowerCount(response.data.followerCount || 0);
+      setFollowingCount(response.data.followingCount || 0);
+      setIsFollowing(response.data.isFollowing || false);
+      setCanViewPosts(response.data.canViewPosts || false);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      setError('Failed to load user profile. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId]);
 
-        fetchUserData();
-    }, [id]);
+  const fetchUserPosts = useCallback(async () => {
+    if (!canViewPosts) {
+      setPosts([]);
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/posts/user/${userId}`);
+      if (response.data.message) {
+        setPosts([]);
+        setError(response.data.message);
+      } else {
+        setPosts(response.data.posts || []);
+        setError(null);
+      }
+    } catch (error) {
+      console.error('Error fetching user posts:', error);
+      setError('Failed to load posts. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, canViewPosts]);
 
-    const handleFollow = async () => {
-        try {
-            await api.post(`/api/users/${id}/follow`);
-            setIsFollowing(true);
-            // Update user's followers count
-            setUser(prev => ({
-                ...prev,
-                followers: [...(prev.followers || []), 'current-user-id'] // You'll need to get the actual current user ID
-            }));
-        } catch (err) {
-            console.error('Failed to follow user:', err);
-        }
+  const handleFollow = async () => {
+    try {
+      await axios.post(`/api/users/${userId}/follow`);
+      setIsFollowing(true);
+      setCanViewPosts(true);
+      setFollowerCount(prev => prev + 1);
+      // Refresh posts after following
+      fetchUserPosts();
+    } catch (error) {
+      console.error('Error following user:', error);
+    }
+  };
+
+  const handleUnfollow = async () => {
+    try {
+      await axios.delete(`/api/users/${userId}/follow`);
+      setIsFollowing(false);
+      setCanViewPosts(false);
+      setFollowerCount(prev => prev - 1);
+      setPosts([]);
+    } catch (error) {
+      console.error('Error unfollowing user:', error);
+    }
+  };
+
+  const handlePrivacyChange = async (event) => {
+    try {
+      await axios.put('/api/users/profile', {
+        isPrivate: event.target.checked
+      });
+      setProfile(prev => ({ ...prev, isPrivate: event.target.checked }));
+    } catch (error) {
+      console.error('Error updating privacy settings:', error);
+    }
+  };
+  
+  useEffect(() => {
+    const loadData = async () => {
+      await fetchUserProfile();
     };
+    loadData();
+  }, [fetchUserProfile]);
 
-    const handleUnfollow = async () => {
-        try {
-            await api.delete(`/api/users/${id}/follow`);
-            setIsFollowing(false);
-            // Update user's followers count
-            setUser(prev => ({
-                ...prev,
-                followers: prev.followers.filter(id => id !== 'current-user-id') // You'll need to get the actual current user ID
-            }));
-        } catch (err) {
-            console.error('Failed to unfollow user:', err);
-        }
-    };
+  useEffect(() => {
+    if (canViewPosts) {
+      fetchUserPosts();
+    }
+  }, [canViewPosts, fetchUserPosts]);
 
-    if (isLoading) return <div>Loading...</div>;
-    if (error) return <div>{error}</div>;
-    if (!user) return <div>User not found</div>;
-
+  if (loading) {
     return (
-        <div className="user-profile">
-            <div className="profile-header">
-                <img src={user.profilePicture} alt={user.username} className="profile-picture" />
-                <div className="profile-info">
-                    <h1>{user.username}</h1>
-                    <p>{user.bio}</p>
-                    <div className="follow-stats">
-                        <span>{posts.length} posts</span>
-                        <span>{user.followers?.length || 0} followers</span>
-                        <span>{user.following?.length || 0} following</span>
-                    </div>
-                    {user.id !== 'current-user-id' && ( // You'll need to get the actual current user ID
-                        <button
-                            onClick={isFollowing ? handleUnfollow : handleFollow}
-                            className={`follow-button ${isFollowing ? 'following' : ''}`}
-                        >
-                            {isFollowing ? 'Unfollow' : 'Follow'}
-                        </button>
-                    )}
-                </div>
-            </div>
-            <div className="posts-grid">
-                {posts.map(post => (
-                    <PostCard key={post.id} post={post} />
-                ))}
-            </div>
-        </div>
+      <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress />
+      </Container>
     );
+  }
+
+  if (!profile) {
+    return (
+      <Container sx={{ mt: 4 }}>
+        <Alert severity="info">User not found.</Alert>
+      </Container>
+    );
+  }
+
+  const isOwnProfile = user && user.id === userId;
+
+  return (
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Grid container spacing={4}>
+        {/* Profile Section - Always visible */}
+        <Grid item xs={12} md={4}>
+          <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
+            <Avatar
+              src={profile.profilePicture}
+              alt={profile.name}
+              sx={{ width: 120, height: 120, mx: 'auto', mb: 2 }}
+            />
+            <Typography variant="h5" gutterBottom>
+              {profile.name}
+            </Typography>
+            {profile.isPrivate && !isFollowing && !isOwnProfile && (
+              <Chip
+                icon={<LockIcon />}
+                label="Private Profile"
+                color="default"
+                sx={{ mb: 2 }}
+              />
+            )}
+            {isOwnProfile && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={profile.isPrivate}
+                    onChange={handlePrivacyChange}
+                    color="primary"
+                  />
+                }
+                label="Private Account"
+                sx={{ mb: 2 }}
+              />
+            )}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                {profile.bio || "No bio available"}
+              </Typography>
+            </Box>
+            <Divider sx={{ my: 2 }} />
+            <Grid container spacing={2} justifyContent="center">
+              <Grid item>
+                <Typography variant="subtitle2">Posts</Typography>
+                <Typography variant="h6">{posts.length}</Typography>
+              </Grid>
+              <Grid item>
+                <Typography variant="subtitle2">Followers</Typography>
+                <Typography variant="h6">{followerCount}</Typography>
+              </Grid>
+              <Grid item>
+                <Typography variant="subtitle2">Following</Typography>
+                <Typography variant="h6">{followingCount}</Typography>
+              </Grid>
+            </Grid>
+            {!isOwnProfile && (
+              <Button
+                variant="contained"
+                color={isFollowing ? "error" : "primary"}
+                startIcon={isFollowing ? <PersonRemoveIcon /> : <PersonAddIcon />}
+                onClick={isFollowing ? handleUnfollow : handleFollow}
+                sx={{ mt: 2 }}
+              >
+                {isFollowing ? "Unfollow" : "Follow"}
+              </Button>
+            )}
+          </Paper>
+        </Grid>
+
+        {/* Posts Section */}
+        <Grid item xs={12} md={8}>
+          <Typography variant="h4" gutterBottom>
+            Posts
+          </Typography>
+          {!canViewPosts ? (
+            <Paper elevation={3} sx={{ p: 5, textAlign: 'center', bgcolor: '#f9f9f9' }}>
+              <LockIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h5" color="text.secondary" gutterBottom>
+                This Account is Private
+              </Typography>
+              <Typography variant="body1" color="text.secondary" paragraph>
+                Follow this account to see their posts and cooking inspiration
+              </Typography>
+              {!isOwnProfile && !isFollowing && (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  startIcon={<PersonAddIcon />}
+                  onClick={handleFollow}
+                  sx={{ mt: 2 }}
+                >
+                  Follow {profile.name}
+                </Button>
+              )}
+            </Paper>
+          ) : posts.length === 0 ? (
+            <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
+              <Typography variant="h6" color="text.secondary">
+                No posts yet.
+              </Typography>
+            </Paper>
+          ) : (
+            <Grid container spacing={3}>
+              {posts.map((post) => (
+                <Grid item xs={12} key={post.id}>
+                  <Card sx={{ borderRadius: 2, overflow: 'hidden' }}>
+                    {post.mediaUrls && post.mediaUrls.length > 0 && (
+                      <CardMedia
+                        component="img"
+                        height="200"
+                        image={post.mediaUrls[0]}
+                        alt={post.title}
+                        sx={{ objectFit: 'cover' }}
+                      />
+                    )}
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>
+                        {post.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        {post.description}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Posted {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+        </Grid>
+      </Grid>
+    </Container>
+  );
 };
 
 export default UserProfile; 

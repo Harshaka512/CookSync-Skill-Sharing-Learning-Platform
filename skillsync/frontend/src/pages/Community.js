@@ -445,30 +445,30 @@ const Community = () => {
               sx={{ mb: 3 }}
             >
             <Tab label="Posts" />
-              <Tab label="Following" />
-            <Tab label="Search Users" />
-            </Tabs>
-            
-          {activeTab === 0 && (
-            // Posts tab content
-            <Box>
-              {posts.length > 0 ? (
-                <Grid container spacing={3}>
-                  {posts.map((post) => (
-                    <Grid item xs={12} key={post.id}>
-                      <Post post={post} onUpdate={fetchPosts} />
-                    </Grid>
-                  ))}
-                </Grid>
-              ) : (
-                <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
-                  <Typography variant="h6" color="text.secondary">
-                    {handleNoPostsMessage()}
-                  </Typography>
-                </Paper>
-              )}
-                  </Box>
-                )}
+    <Tab label="Following" />
+    <Tab label="Search Users" />
+  </Tabs>
+  
+{activeTab === 0 && (
+  // Posts tab content
+  <Box>
+    {posts.length > 0 ? (
+      <Grid container spacing={3}>
+        {posts.map((post) => (
+          <Grid item xs={12} key={post.id}>
+            <Post post={post} onUpdate={fetchPosts} />
+          </Grid>
+        ))}
+      </Grid>
+    ) : (
+      <Paper elevation={3} sx={{ p: 3, textAlign: 'center' }}>
+        <Typography variant="h6" color="text.secondary">
+          {handleNoPostsMessage()}
+        </Typography>
+      </Paper>
+    )}
+        </Box>
+      )}
 
           {activeTab === 1 && (
             // Following tab content
