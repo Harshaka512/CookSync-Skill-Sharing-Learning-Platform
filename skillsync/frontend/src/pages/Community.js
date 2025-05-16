@@ -67,7 +67,7 @@ const Community = () => {
     { id: 'all', label: 'All Posts', icon: '🌐', color: 'primary' },
     { id: 'breakfast', label: 'Breakfast', icon: '🍳', color: 'warning' },
     { id: 'lunch', label: 'Lunch', icon: '🥪', color: 'success' },
-    { id: 'dinner', label: 'Dinner', icon: '🍽', color: 'error' },
+    { id: 'dinner', label: 'Dinner', icon: '🍽️', color: 'error' },
     { id: 'dessert', label: 'Dessert', icon: '🍰', color: 'secondary' },
     { id: 'snacks', label: 'Snacks', icon: '🥨', color: 'info' },
     { id: 'vegetarian', label: 'Vegetarian', icon: '🥗', color: 'success' },
@@ -331,151 +331,171 @@ const Community = () => {
     setSearchTimeout(timeout);
   };
 
-  const renderPost = (post) => {
-    // Get a timestamp for cache-busting and debugging
-    const timestamp = Date.now();
-    const hasUserPicture = Boolean(post.userPicture);
-    
-    return (
-      <Card key={post.id} sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <Avatar
-              alt={post.userName || 'User'}
-              src={post.userPicture ? `${post.userPicture}?t=${timestamp}` : '/default-avatar.svg'}
+  const renderPost = (post) => (
+    <Card key={post.id} sx={{ mb: 3, borderRadius: 2, boxShadow: 2 }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Avatar
+            alt={post.userName}
+            src={post.userPicture}
+            sx={{ 
+              mr: 2, 
+              cursor: 'pointer',
+              width: 48,
+              height: 48,
+              bgcolor: post.userPicture ? 'transparent' : 'primary.main',
+              '&:hover': {
+                transform: 'scale(1.05)',
+                transition: 'transform 0.2s ease-in-out'
+              }
+            }}
+            onClick={() => navigate(`/users/${post.userId}`)}
+          >
+            {!post.userPicture && post.userName?.charAt(0).toUpperCase()}
+          </Avatar>
+          <Box sx={{ flex: 1 }}>
+            <Typography 
+              variant="subtitle1" 
               sx={{ 
-                mr: 2, 
                 cursor: 'pointer',
-                width: 48,
-                height: 48,
-                bgcolor: theme.palette.primary.main,
+                fontWeight: 600,
                 '&:hover': {
-                  transform: 'scale(1.05)',
-                  transition: 'transform 0.2s ease-in-out'
+                  color: 'primary.main'
                 }
               }}
               onClick={() => navigate(`/users/${post.userId}`)}
-              imgProps={{
-                onError: (e) => {
-                  e.target.src = '/default-avatar.svg';
-                  console.log('Image load error in Community for', post.userName);
-                },
-                'data-has-picture': hasUserPicture.toString()
-              }}
             >
-              {(!post.userPicture || post.userPicture === '/default-avatar.svg') && post.userName?.charAt(0).toUpperCase()}
-            </Avatar>
-            <Box sx={{ flex: 1 }}>
-              <Typography 
-                variant="subtitle1" 
-                sx={{ 
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  '&:hover': {
-                    color: 'primary.main'
-                  }
-                }}
-                onClick={() => navigate(`/users/${post.userId}`)}
-              >
-                {post.userName || 'Anonymous User'}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-              </Typography>
-            </Box>
-            {user && user.sub !== post.userId && (
-              <Button
-                variant="outlined"
-                size="small"
-                color={followStatus[post.userId] ? "error" : "primary"}
-                startIcon={followStatus[post.userId] ? <PersonRemoveIcon /> : <PersonAddIcon />}
-                onClick={() => followStatus[post.userId] ? handleUnfollow(post.userId) : handleFollow(post.userId)}
-                sx={{ ml: 2 }}
-              >
-                {followStatus[post.userId] ? "Unfollow" : "Follow"}
-              </Button>
-            )}
+              {post.userName}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
+            </Typography>
           </Box>
-          
-          <Typography variant="h6" gutterBottom>
-            {post.title}
-          </Typography>
-          
-          <Typography variant="body1" paragraph>
-            {post.description}
-          </Typography>
-          
-          {post.mediaUrls && post.mediaUrls.length > 0 && (
-            <Box sx={{ mt: 2, mb: 2 }}>
-              {post.mediaType === 'image' ? (
-                <img
-                  src={post.mediaUrls[0]}
-                  alt={post.title}
-                  style={{ 
-                    maxWidth: '100%', 
-                    borderRadius: '8px',
-                    maxHeight: '500px',
-                    objectFit: 'cover'
-                  }}
-                />
-              ) : post.mediaType === 'video' ? (
-                <video
-                  controls
-                  style={{ 
-                    maxWidth: '100%', 
-                    borderRadius: '8px',
-                    maxHeight: '500px'
-                  }}
-                >
-                  <source src={post.mediaUrls[0]} type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-              ) : null}
-            </Box>
+          {user && user.sub !== post.userId && (
+            <Button
+              variant="outlined"
+              size="small"
+              color={followStatus[post.userId] ? "error" : "primary"}
+              startIcon={followStatus[post.userId] ? <PersonRemoveIcon /> : <PersonAddIcon />}
+              onClick={() => followStatus[post.userId] ? handleUnfollow(post.userId) : handleFollow(post.userId)}
+              sx={{ ml: 2 }}
+            >
+              {followStatus[post.userId] ? "Unfollow" : "Follow"}
+            </Button>
           )}
-          
-          {post.ingredients && post.ingredients.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Ingredients:
-              </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {post.ingredients.map((ingredient, index) => (
-                  <Chip
-                    key={index}
-                    label={`${ingredient}${post.amounts ? ` - ${post.amounts[index]}` : ''}`}
-                    size="small"
-                    variant="outlined"
-                  />
-                ))}
-              </Box>
-            </Box>
-          )}
-        </CardContent>
+        </Box>
         
-        <PostInteraction 
-          post={post} 
-          onUpdate={handlePostUpdate}
-        />
-      </Card>
-    );
-  };
+        <Typography variant="h6" gutterBottom>
+          {post.title}
+        </Typography>
+        
+        <Typography variant="body1" paragraph>
+          {post.description}
+        </Typography>
+        
+        {post.mediaUrls && post.mediaUrls.length > 0 && (
+          <Box sx={{ mt: 2, mb: 2 }}>
+            <Grid container spacing={1}>
+              {post.mediaUrls.map((url, index) => {
+                const isVideo = url.match(/\.(mp4|webm|ogg)$/i);
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={index}>
+                    {!isVideo ? (
+                      <img
+                        src={url}
+                        alt={`${post.title} - Image ${index + 1}`}
+                        style={{ 
+                          width: '100%',
+                          height: '200px',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                        onError={(e) => {
+                          console.error('Error loading image:', url);
+                          e.target.src = '/placeholder-image.jpg';
+                        }}
+                      />
+                    ) : (
+                      <video
+                        controls
+                        style={{ 
+                          width: '100%',
+                          height: '200px',
+                          objectFit: 'cover',
+                          borderRadius: '8px'
+                        }}
+                      >
+                        <source src={url} type="video/mp4" />
+                        Your browser does not support the video tag.
+                      </video>
+                    )}
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Box>
+        )}
+        
+        {post.ingredients && post.ingredients.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Ingredients:
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {post.ingredients.map((ingredient, index) => (
+                <Chip
+                  key={index}
+                  label={post.amounts && post.amounts[index] ? 
+                    `${ingredient} - ${post.amounts[index]}` : 
+                    ingredient}
+                  size="small"
+                  variant="outlined"
+                />
+              ))}
+            </Box>
+          </Box>
+        )}
 
-  const handleNoPostsMessage = () => {
-    if (activeTab === 0) {
-      return 'No posts available. This may be because users have set their profiles to private. Follow users to see their posts.';
-    } else {
-      return 'No posts from followed users yet. Follow some users to see their posts here!';
-    }
-  };
-
-  const handleNavigateToUserProfile = (userId) => {
-    navigate(`/users/${userId}`);
-  };
-
-  const handleNavigateToPost = (postId) => {
-    navigate(`/posts/${postId}`);
-  };
+        {post.instructions && post.instructions.length > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Instructions:
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {post.instructions.map((instruction, index) => (
+                <Box key={index} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      minWidth: '24px',
+                      height: '24px',
+                      borderRadius: '50%',
+                      backgroundColor: 'primary.main',
+                      color: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    {index + 1}
+                  </Typography>
+                  <Typography variant="body2">
+                    {instruction}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+      </CardContent>
+      
+      <PostInteraction 
+        post={post} 
+        onUpdate={handlePostUpdate}
+      />
+    </Card>
+  );
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -630,7 +650,7 @@ const Community = () => {
                 <CircularProgress />
               </Box>
             ) : activeTab === 2 ? (
-              <UserSearch />
+              <UserSearch onUserSelect={(user) => navigate(`/users/${user.id}`)} />
             ) : (activeTab === 0 ? filteredPosts : filteredFollowingPosts).length > 0 ? (
               <>
                 {(activeTab === 0 ? filteredPosts : filteredFollowingPosts).map(renderPost)}
