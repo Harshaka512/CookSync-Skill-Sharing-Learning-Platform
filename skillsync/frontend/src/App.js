@@ -13,6 +13,7 @@ import PostCreate from './pages/posts/PostCreate';
 import PostEdit from './pages/posts/PostEdit';
 import LearningPlans from './pages/learning/LearningPlans';
 import LearningPlanDetail from './pages/learning/LearningPlanDetail';
+import NotificationsPage from './pages/NotificationsPage';
 import Error from './pages/Error';
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
         <Route path="posts/:id/edit" element={<PostEdit />} />
         <Route path="learning-plans" element={<LearningPlans />} />
         <Route path="learning-plans/:id" element={<LearningPlanDetail />} />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="*" element={<Error />} />
       </Route>
     </Routes>

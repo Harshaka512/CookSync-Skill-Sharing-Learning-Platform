@@ -8,6 +8,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -118,8 +119,56 @@ public class UserController {
         }
     }
 
-    @GetMapping("/{id}/profile")
-    // ... existing code ...
+    @GetMapping("/{userId}/profile")
+    public ResponseEntity<?> getUserProfileById(@PathVariable String userId) {
+        try {
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            // Check if the current user is following this user
+            boolean isFollowing = false;
+            boolean canViewPosts = !user.isPrivate(); // Can view if account is public
+            
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getPrincipal() instanceof OAuth2User) {
+                OAuth2User oauth2User = (OAuth2User) authentication.getPrincipal();
+                String currentUserId = oauth2User.getName();
+                
+                // If the current user is the profile owner or follows the user, they can view private posts
+                if (currentUserId.equals(userId)) {
+                    canViewPosts = true; // User can view their own posts
+                } else {
+                    User currentUser = userRepository.findById(currentUserId).orElse(null);
+                    if (currentUser != null && currentUser.getFollowing() != null) {
+                        isFollowing = currentUser.getFollowing().contains(userId);
+                        if (isFollowing) {
+                            canViewPosts = true; // Followers can view private posts
+                        }
+                    }
+                }
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("id", user.getId());
+            response.put("name", user.getName());
+            response.put("email", user.getEmail());
+            response.put("bio", user.getBio());
+            response.put("profilePicture", user.getProfilePicture());
+            response.put("coverPhoto", user.getCoverPhoto());
+            response.put("specialties", user.getSpecialties());
+            response.put("favoriteRecipes", user.getFavoriteRecipes());
+            response.put("followerCount", user.getFollowerCount());
+            response.put("followingCount", user.getFollowingCount());
+            response.put("isPrivate", user.isPrivate());
+            response.put("canViewPosts", canViewPosts);
+            response.put("isFollowing", isFollowing);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error fetching user profile", e);
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch user profile data"));
+        }
+    }
 
     @GetMapping
     public ResponseEntity<?> getAllUsers() {
