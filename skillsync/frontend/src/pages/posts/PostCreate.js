@@ -50,6 +50,28 @@ const PostCreate = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Special validation for title field
+    if (name === 'title') {
+      // Only allow letters, spaces, and basic punctuation
+      const lettersOnly = /^[A-Za-z\s.,!?-]*$/;
+      if (!lettersOnly.test(value)) {
+        /*setError('Title can only contain letters, spaces, and basic punctuation (.,!?-)');*/
+        return;
+      }
+    }
+
+     // Special validation for description field
+     if (name === 'description') {
+      // Only allow letters, spaces, and basic punctuation
+      const lettersOnly = /^[A-Za-z\s.,!?-]*$/;
+      if (!lettersOnly.test(value)) {
+        /*setError('Title can only contain letters, spaces, and basic punctuation (.,!?-)');*/
+        return;
+      }
+    }
+
+  
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -61,37 +83,59 @@ const PostCreate = () => {
     setMediaError('');
 
     // Check total number of files
-    if (mediaFiles.length + files.length > 3) {
+    if (mediaFiles.length + files.length > MAX_IMAGES) {
       setMediaError('Maximum 3 media files allowed (photos and videos combined)');
       return;
     }
 
-    // Validate each file
-    for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        // Handle image file
-        setMediaFiles(prev => [...prev, { file, type: 'image' }]);
-        const preview = URL.createObjectURL(file);
-        setMediaPreviews(prev => [...prev, { url: preview, type: 'image' }]);
-      } else if (file.type.startsWith('video/')) {
-        // Handle video file
-        const video = document.createElement('video');
-        video.preload = 'metadata';
-        video.onloadedmetadata = function() {
-          if (this.duration > 30) {
-            setMediaError('Videos must be 30 seconds or less');
+    // Process files sequentially to ensure proper validation
+    const processFiles = async () => {
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          // Handle image file
+          setMediaFiles(prev => [...prev, { file, type: 'image' }]);
+          const preview = URL.createObjectURL(file);
+          setMediaPreviews(prev => [...prev, { url: preview, type: 'image' }]);
+        } else if (file.type.startsWith('video/')) {
+          // Handle video file
+          try {
+            const duration = await new Promise((resolve, reject) => {
+              const video = document.createElement('video');
+              video.preload = 'metadata';
+              
+              video.onloadedmetadata = function() {
+                URL.revokeObjectURL(video.src);
+                resolve(this.duration);
+              };
+              
+              video.onerror = () => {
+                URL.revokeObjectURL(video.src);
+                reject(new Error('Error loading video metadata'));
+              };
+              
+              video.src = URL.createObjectURL(file);
+            });
+
+            if (duration > MAX_VIDEO_DURATION_SECONDS) {
+              setMediaError(`Video must be ${MAX_VIDEO_DURATION_SECONDS} seconds or less`);
+              return;
+            }
+
+            setMediaFiles(prev => [...prev, { file, type: 'video' }]);
+            const preview = URL.createObjectURL(file);
+            setMediaPreviews(prev => [...prev, { url: preview, type: 'video' }]);
+          } catch (error) {
+            setMediaError('Error processing video file');
             return;
           }
-          setMediaFiles(prev => [...prev, { file, type: 'video' }]);
-          const preview = URL.createObjectURL(file);
-          setMediaPreviews(prev => [...prev, { url: preview, type: 'video' }]);
-        };
-        video.src = URL.createObjectURL(file);
-      } else {
-        setMediaError('Invalid file type. Please upload images or videos only.');
-        return;
+        } else {
+          setMediaError('Invalid file type. Please upload images or videos only.');
+          return;
+        }
       }
-    }
+    };
+
+    processFiles();
   };
 
   const handleRemoveMedia = (index) => {
